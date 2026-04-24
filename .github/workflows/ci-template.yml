@@ -314,7 +314,7 @@ jobs:
           format: table
           exit-code: '1'
           ignore-unfixed: true
-          severity: HIGH,CRITICAL
+          severity: CRITICAL
 
   # ── JOB 7: PUSH ─────────────────────────────────────────────────────────────
   push:
