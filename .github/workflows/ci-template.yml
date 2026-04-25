@@ -311,7 +311,7 @@ jobs:
     name: "Docker Push"
     runs-on: ubuntu-latest
     needs: [prepare, trivy]
-    if: needs.prepare.outputs.push == 'true'
+    if: always()
 
     permissions:
       contents: write
