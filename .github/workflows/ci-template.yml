@@ -195,7 +195,6 @@ jobs:
             -Dsonar.qualitygate.wait=true
             -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**,**/*.test.js,**/*.spec.js,**/*.min.js
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.sources=${{ inputs.working_directory }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
