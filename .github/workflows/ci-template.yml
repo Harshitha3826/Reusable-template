@@ -66,6 +66,8 @@ on:
         required: true
       EMAIL_TO:
         required: true
+      HELM_REPO_TOKEN:
+        required: false
 
 # ──────────────────────────────────────────────────────────────────────────────
 # JOB GRAPH:
@@ -384,7 +386,7 @@ jobs:
         with:
           repository: ${{ inputs.helm_repo }}
           path: helm-repo
-          token: ${{ github.token }}
+          token: ${{ secrets.HELM_REPO_TOKEN }}
 
       - name: Install yq
         if: inputs.helm_repo != ''
