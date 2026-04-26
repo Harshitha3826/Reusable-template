@@ -184,6 +184,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working_directory }}
+        run: npm ci || npm install
+
+      - name: Run tests with coverage
+        working-directory: ${{ inputs.working_directory }}
+        run: npx jest --coverage --coverageReporters=lcov --passWithNoTests || true
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         with:
