@@ -14,9 +14,8 @@ on:
         type: boolean
         default: false
       sonar_project_key:
-        required: false
+        required: true
         type: string
-        default: 'VastraCo'
       docker_context:
         required: false
         type: string
@@ -193,11 +192,17 @@ jobs:
           args: >
             -Dsonar.projectKey=${{ inputs.sonar_project_key }}
             -Dsonar.projectName=${{ inputs.sonar_project_key }}
+            -Dsonar.qualitygate.wait=true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-     
+      - name: Quality Gate Check
+        uses: SonarSource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   # ── JOB 4: SNYK ─────────────────────────────────────────────────────────────
   snyk:
