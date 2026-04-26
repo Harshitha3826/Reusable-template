@@ -28,6 +28,22 @@ on:
       service-name:
         required: true
         type: string
+      helm_repo:
+        required: false
+        type: string
+        default: ''
+      helm_chart_path:
+        required: false
+        type: string
+        default: ''
+      values_file:
+        required: false
+        type: string
+        default: 'values.yaml'
+      helm_service_key:
+        required: false
+        type: string
+        default: ''
 
     secrets:
       SONAR_TOKEN:
@@ -50,13 +66,15 @@ on:
         required: true
       EMAIL_TO:
         required: true
+      GITHUB_TOKEN:
+        required: false
 
 # ──────────────────────────────────────────────────────────────────────────────
 # JOB GRAPH:
 #
 #   prepare
 #     ├── test ─────────────┐
-#     ├── sonar ────────────┼──► build ──► trivy ──► push ──► notify
+#     ├── sonar ────────────┼──► build ──► trivy ──► push ──► update-helm ──► notify
 #     └── snyk  ────────────┘
 #
 # ──────────────────────────────────────────────────────────────────────────────
@@ -350,7 +368,70 @@ jobs:
           custom_tag: ${{ needs.prepare.outputs.tag }}
           tag_prefix: ''
 
-  # ── JOB 8: CREATE RELEASE ───────────────────────────────────────────────────
+  # ── JOB 8: UPDATE HELM VALUES ────────────────────────────────────────────────
+  update-helm:
+    name: "Update Helm Values"
+    runs-on: ubuntu-latest
+    needs: [prepare, push]
+    if: |
+      github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev-Branch'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Helm Repository
+        if: inputs.helm_repo != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.helm_repo }}
+          path: helm-repo
+          token: ${{ github.token }}
+
+      - name: Install yq
+        if: inputs.helm_repo != ''
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Determine Values File
+        if: inputs.helm_repo != ''
+        id: values_file
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "file=values-main.yaml" >> $GITHUB_OUTPUT
+          else
+            echo "file=${{ inputs.values_file }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Values File
+        if: inputs.helm_repo != '' && inputs.helm_chart_path != '' && inputs.helm_service_key != ''
+        working-directory: helm-repo
+        run: |
+          VALUES_PATH="${{ inputs.helm_chart_path }}/${{ steps.values_file.outputs.file }}"
+          SERVICE_KEY="${{ inputs.helm_service_key }}"
+          NEW_TAG="${{ needs.prepare.outputs.tag }}"
+
+          echo "Updating $VALUES_PATH - $SERVICE_KEY.tag = $NEW_TAG"
+
+          # Update the tag value in the values file
+          yq eval ".${SERVICE_KEY}.tag = \"${NEW_TAG}\"" -i "$VALUES_PATH"
+
+          # Show the updated section
+          yq eval ".${SERVICE_KEY}.tag" "$VALUES_PATH"
+
+      - name: Commit and Push Changes
+        if: inputs.helm_repo != '' && inputs.helm_chart_path != '' && inputs.helm_service_key != ''
+        working-directory: helm-repo
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add "${{ inputs.helm_chart_path }}/${{ steps.values_file.outputs.file }}"
+          git commit -m "chore: update ${{ inputs.service-name }} tag to ${{ needs.prepare.outputs.tag }}" || echo "No changes to commit"
+          git push
+
+  # ── JOB 9: CREATE RELEASE ──────────────────────────────────────────────────
   create-release:
     name: "Create GitHub Release"
     needs: [prepare, test, sonar, snyk, build, trivy, push]
@@ -378,11 +459,11 @@ jobs:
             Image: ${{ secrets.DOCKER_USERNAME }}/${{ inputs.service-name }}:${{ needs.prepare.outputs.tag }}
           generate_release_notes: true
 
-  # ── JOB 9: NOTIFY ───────────────────────────────────────────────────────────
+  # ── JOB 10: NOTIFY ──────────────────────────────────────────────────────────
   notify:
     name: "Notify"
     runs-on: ubuntu-latest
-    needs: [prepare, test, sonar, snyk, build, trivy, push, create-release]
+    needs: [prepare, test, sonar, snyk, build, trivy, push, update-helm, create-release]
     if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Dev-Branch')
     # ← CHANGED: added Dev-Branch condition
 
